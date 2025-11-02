@@ -158,7 +158,7 @@ namespace FunctionDocs
 
             return sb.ToString();
         }
-        //Quiero ejecutar la documentación
+        //Quiero ejecutar la documentación ahora en master
 
         // Construye prompt con normas y fragmento de código
         private static string BuildPrompt(string filePath, string codeFragment, int fragmentIndex, int totalFragments)
