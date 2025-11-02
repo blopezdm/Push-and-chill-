@@ -3,7 +3,7 @@ name: Analizar código y generar MD
 on:
   push:
     branches:
-      - main
+      - master
     paths-ignore:
       - 'docs/analisis/**'   # Evita loops al actualizar MD
 
