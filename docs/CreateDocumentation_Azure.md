@@ -1,4 +1,4 @@
-```markdown
+
 # CreateDocumentation_Azure.cs
 
 ## Descripción funcional
@@ -273,6 +273,7 @@ Estructura de datos auxiliar utilizada para modelar el contenido de la solicitud
 ---
 
 ```
+
 
 
 SHA:be6419d3d662d5eec031b24db512b0edb8fe04d0
