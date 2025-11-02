@@ -1,0 +1,41 @@
+﻿trigger:
+  branches:
+    include:
+      - main  # Cambia por la rama que quieras monitorear
+
+variables:
+- group: MySecretsGroup   # Grupo donde guardaste AZURE_FUNCTION_URL, AZDO_PAT, etc.
+
+stages:
+- stage: AnalyzeRepo
+  displayName: "Analizar repositorio"
+  jobs:
+  - job: CallFunction
+    displayName: "Llamar Azure Function para análisis"
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: PowerShell@2
+      name: CallFunction
+      inputs:
+        targetType: inline
+        script: |
+          # Construir body JSON
+          $body = @{
+            Org      = "$(AZDO_ORG)"
+            Project  = "$(AZDO_PROJECT)"
+            RepoId   = "$(AZDO_REPO_ID)"
+            Branch   = "main"
+          } | ConvertTo-Json
+
+          Write-Host "Llamando a Azure Function..."
+          
+          # Llamada HTTP a la Azure Function usando el secreto
+          $headers = @{
+            "Content-Type" = "application/json"
+          }
+
+          $response = Invoke-RestMethod -Uri "$(AZURE_FUNCTION_URL)" -Method POST -Body $body -Headers $headers
+          Write-Host "Respuesta de la Function:"
+          Write-Host $response
+
