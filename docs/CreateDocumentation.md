@@ -1,4 +1,4 @@
-```markdown
+
 # Documentación Técnica
 
 ## Nombre del archivo: CreateDocumentation.cs
@@ -121,6 +121,7 @@ El archivo contiene las siguientes propiedades, métodos y funciones definidas p
 ## Fragmento 1 de 1
 
 Esta función proporciona una solución automatizada robusta para generar documentación técnica de archivos en repositorios GitHub utilizando tecnologías modernas como Azure Functions, OpenAI GPT y servicios web. Puede ser útil para equipos de desarrollo que busquen mejorar la calidad y mantenibilidad de su código manteniendo documentación actualizada.
+
 
 
 SHA:d0a65a24da096e405be691ecf6a0c520cd08528b
