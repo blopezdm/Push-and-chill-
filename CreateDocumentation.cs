@@ -7,6 +7,9 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using System.Runtime.CompilerServices;
+using System.Data;
+using System.Numerics;
 
 namespace FunctionDocs
 {
@@ -32,6 +35,7 @@ namespace FunctionDocs
 
             string repo = jsonDoc.RootElement.GetProperty("repo").GetString();
             string branch = jsonDoc.RootElement.GetProperty("branch").GetString();
+            string complete = jsonDoc.RootElement.GetProperty("complete").GetString();
 
             string githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
             string openaiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
@@ -71,6 +75,13 @@ namespace FunctionDocs
 
             _logger.LogInformation($"Cantidad de archivos: {files.Count}");
 
+            
+
+            Console.WriteLine("🧠 Enviando resumen a la IA para análisis arquitectónico...\n");
+            var allFilesSummary = new StringBuilder();
+
+            string repoStructure = allFilesSummary.ToString();
+
             foreach (var file in files)
             {
                 // 2️⃣ Obtener contenido del archivo desde GitHub
@@ -88,6 +99,41 @@ namespace FunctionDocs
                 bool skip = false;
                 var existingResponse = await _httpClient.GetAsync(
                     $"https://api.github.com/repos/{repo}/contents/{githubPath}?ref={branch}");
+
+                string promptResumenArchivo = $@"
+                    Eres un asistente experto en arquitectura de software y documentación técnica de código. 
+                    Tu tarea es **resumir el siguiente archivo** de forma precisa y concisa para que pueda ser usado en un análisis global del repositorio.
+
+                    Instrucciones:
+                    1. Indica el **nombre del archivo**.
+                    2. Explica la **funcionalidad principal** del archivo en pocas frases.
+                    3. Lista todas las **clases, interfaces y funciones/métodos definidos**, indicando:
+                       - Nombre
+                       - Parámetros
+                       - Valor de retorno
+                       - Propósito/resumen de lo que hace
+                    4. Indica cualquier **dependencia interna o externa** (librerías, APIs, servicios, módulos importados).
+                    5. Señala patrones de arquitectura o estructura del código que puedas inferir (ej. repositorio, singleton, MVC, microservicio, etc.).
+                    6. Usa un formato **Markdown breve**:
+                       - Encabezado con el nombre del archivo
+                       - Breve descripción funcional
+                       - Lista de elementos técnicos importantes (clases, funciones, dependencias)
+                    7. Sé preciso y **omite contenido genérico o repetitivo**.
+                    8. Mantén el resultado **breve pero completo**, adecuado para concatenar en un resumen global del repositorio.
+
+                    Archivo:
+                    {fileContent}
+                    ";
+
+                string fileSummary = await GenerateDocumentationAsync(promptResumenArchivo, openaiKey);
+            
+
+               allFilesSummary.AppendLine($"## Archivo: {file.Path}");
+                allFilesSummary.AppendLine("```");
+                allFilesSummary.AppendLine(fileSummary);
+                allFilesSummary.AppendLine("```");
+                allFilesSummary.AppendLine();
+
                 string existingSha = null!;
                 if (existingResponse.IsSuccessStatusCode)
                 {
@@ -128,13 +174,59 @@ namespace FunctionDocs
                 uploadResponse.EnsureSuccessStatusCode();
 
                 _logger.LogInformation($"Documento actualizado/subido: {githubPath}");
+
+               
             }
+
+
+       
+                string repoSummary = allFilesSummary.ToString();
+
+            if (complete == "TRUE") {
+
+
+
+                string globalAnalysis = await GenerateDocumentationGeneralAsync(repoSummary, openaiKey);
+                string analysisPath = "README.md";
+
+                // Verificar si ya existe
+                string? existingShageneral = null;
+                var existingResp = await _httpClient.GetAsync($"https://api.github.com/repos/{repo}/contents/{analysisPath}?ref={branch}");
+                if (existingResp.IsSuccessStatusCode)
+                {
+                    var existingJson = JsonDocument.Parse(await existingResp.Content.ReadAsStringAsync());
+                    existingShageneral = existingJson.RootElement.GetProperty("sha").GetString();
+                }
+
+                var jsonpayloadgeneral = new
+                {
+                    message = "Actualizar análisis global de la solución con IA",
+                    content = Convert.ToBase64String(Encoding.UTF8.GetBytes(globalAnalysis)),
+                    branch = branch,
+                    sha = existingShageneral
+                };
+
+                var payloadgeneral = JsonSerializer.Serialize(jsonpayloadgeneral, new JsonSerializerOptions
+                {
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                });
+
+                var httpContentgeneral = new StringContent(payloadgeneral, Encoding.UTF8, "application/json");
+                var uploadResp = await _httpClient.PutAsync(
+                    $"https://api.github.com/repos/{repo}/contents/{analysisPath}", httpContentgeneral);
+                uploadResp.EnsureSuccessStatusCode();
+
+                _logger.LogInformation("✅ Análisis global completado y subido a docs/ANALYSIS.md.");
+
+            }
+           
 
             var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
             await response.WriteStringAsync("✅ Análisis completado.");
             return response;
         }
 
+        
         // Divide archivo grande en fragmentos y genera Markdown completo
         private static async Task<string> GenerateDocumentationWithFragments(string filePath, string content, string apiKey)
         {
@@ -186,6 +278,7 @@ namespace FunctionDocs
                 $"Tu tarea es analizar el siguiente archivo y realizar un **documento técnico completo** en Markdown listo para README.md.\n\nFragmento {fragmentIndex} Total Fragmento: {totalFragments}\n\nInstrucciones:\n{normas}\n\nArchivo: {filePath}\n\nCódigo:\n{codeFragment}";
         }
 
+        
         // Llama a Azure OpenAI GPT-4o
         private static async Task<string> GenerateDocumentationAsync(string prompt, string apiKey)
         {
@@ -220,5 +313,72 @@ namespace FunctionDocs
 
             return result!;
         }
+
+        private static async Task<string> GenerateDocumentationGeneralAsync(string repoSummary, string apiKey)
+        {
+            var prompt = @$"
+                Eres un arquitecto de software experto. A continuación tienes la estructura de un repositorio en GitHub.
+
+                Analiza y explica en detalle:
+                1. Qué tipo de solución es (API, frontend, microservicios, librería, etc.).
+                2. Qué tecnologías, frameworks y patrones se están usando.
+                3. Qué tipo de arquitectura tiene (monolito, n capas, hexagonal, microservicios, etc.).
+                4. Qué dependencias o componentes externos podrían estar presentes.
+                5. Genera un diagrama **Mermaid** 100 % compatible con **GitHub Markdown**.
+
+                ⚠️ Reglas obligatorias para el diagrama Mermaid:
+                - Usa la sintaxis básica: `graph TD` o `graph LR`.
+                - **No uses paréntesis, corchetes, ni subgraph.**
+                - Si necesitas aclarar texto, usa guiones o comillas dobles, por ejemplo: `A[""HttpTrigger POST""]`.
+                - No uses `style`, `linkStyle`, `click` ni `subgraph`.
+                - El bloque debe ir entre ```mermaid y ```.
+
+                Formato del resultado:
+                - Breve resumen técnico.
+                - Descripción de arquitectura.
+                - Tecnologías usadas.
+                - Diagrama Mermaid válido para GitHub.
+                - Conclusión final.
+
+                Repositorio:
+                {repoSummary}
+                ";
+
+
+            string endpoint = "https://openai-netcore.openai.azure.com/";
+            string deployment = "gpt-4o";
+            string apiVersion = "2024-04-01-preview";
+
+            var payload = new
+            {
+                messages = new[]
+                {
+                new { role = "system", content = "Eres un asistente experto en arquitectura de software y análisis de código." },
+                new { role = "user", content = prompt }
+            },
+                temperature = 1,
+                top_p = 1,
+                max_tokens = 16000
+            };
+
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync($"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={apiVersion}", content);
+            response.EnsureSuccessStatusCode();
+
+            var responseString = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(responseString);
+            var result = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+
+            return result!;
+        }
+
+        
+    
+
     }
 }
