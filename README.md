@@ -1,109 +1,96 @@
-### Breve Resumen Técnico  
+### Análisis técnico del repositorio
 
-La solución se estructura como un sistema de **Azure Function App** que realiza análisis y documentación automatizados de archivos fuente en repositorios alojados en GitHub y Azure DevOps. Utiliza servicios externos como GitHub API, Azure DevOps API, y OpenAI GPT-4 para generar documentación técnica en formato Markdown, garantizando versiones actualizadas.
-
----
-
-### Descripción de Arquitectura  
-
-La arquitectura utiliza los principios **n capas** dentro de un entorno **serverless**. Se divide en las siguientes capas:  
-1. **Capa de Entrada (Triggers):**
-   - Expone endpoints HTTP mediante el uso de **[HttpTrigger]** en las Azure Functions; estas actúan como los puntos de entrada al sistema.  
-   - Las funciones esperan solicitudes HTTP POST con parámetros en formato JSON para iniciar el proceso.  
-
-2. **Capa de Lógica de Negocio:**
-   - Contiene lógica robusta para análisis, fragmentación de archivos grandes y comunicación con APIs externas.
-   - Maneja la tokenización, validación de SHA, integración con OpenAI, y generación/actualización de documentación.  
-
-3. **Capa de Integración:**
-   - API de GitHub y Azure DevOps para listar, recuperar y actualizar contenido. La solución interactúa con APIs REST externas para obtener y modificar archivos.  
-   - API de OpenAI para realizar análisis avanzado y generación de documentación.  
-
-4. **Capa de Escritura de Documentación**:
-   - Fragmenta archivos grandes.  
-   - Genera archivos Markdown y asegura sincronización contra repositorios destino.  
-
-La **base serverless** se asienta sobre Azure Functions, lo que permite el escalado automático y alta disponibilidad. La arquitectura es simple pero muy extensible, y el código está diseñado para manejar múltiples repositorios simultáneamente.  
+#### 1. Qué tipo de solución es
+La solución es un conjunto de **funciones serverless (Azure Functions)**. Estas funciones están diseñadas para procesar solicitudes HTTP y realizar tareas como la generación de documentación automatizada a partir de repositorios GitHub y Azure DevOps mediante la integración con APIs externas.
 
 ---
 
-### Tecnologías Usadas  
-
-1. **Lenguaje**:  
-   - **C#** bajo .NET (Azure Functions Worker).  
-
-2. **Framework**:
-   - **Azure Functions Framework**: implementa funciones escalables y serverless.  
-
-3. **APIs Externas**:  
-   - **GitHub API**: para listar archivos y actualizar contenido.  
-   - **Azure DevOps API**: para interacción con repositorios DevOps.  
-   - **Azure OpenAI GPT-4o**: para análisis y generación de documentación técnica.  
-
-4. **Patrones Utilizados**:  
-   - **Data Protection & Key Management** (se usa para proteger API Keys mediante configuraciones de ambiente).  
-   - **Repository Pattern**: maneja la interacción con sistemas externos (GitHub/Azure DevOps).  
-   - **Builder Pattern**: configuración del entorno con `FunctionsApplication.CreateBuilder(args)`.  
-   - **Encapsulación de Negocio** mediante métodos organizados por pasos dentro de una clase (como en `AnalyzeFileInFragments`).  
-
-5. **Bibliotecas**:
-   - **HttpClient** para realizar solicitudes HTTP.  
-   - **Microsoft.Extensions.Logging** para trazabilidad y logueo.  
+#### 2. Tecnologías, frameworks y patrones utilizados
+- **Lenguaje:** C# (implementado con .NET).
+- **Azure Functions Worker SDK:** El framework serverless utilizado para implementar y ejecutar las funciones. Especifica que las funciones están basadas en un modelo worker `Microsoft.Azure.Functions.Worker`.
+- **Librerías principales:**
+  - `System.Net.Http`, `System.Text.Json`: Para gestionar solicitudes HTTP y procesamiento de JSON.
+  - `Microsoft.Extensions.Logging`: Utilizado para agregar logs robustos dentro de las funciones.
+  - `Microsoft.AspNetCore.Http` y `Microsoft.Azure.Functions.Worker.Http`: Clases específicas para comunicación http en Azure Functions.
+  - `Microsoft.AspNetCore.Mvc`: Utilizado para trabajar con puntos de entrada como controladores o redirección.
+- **Integración con servicios externos:**
+  - **GitHub API:** Para interactuar con repositorios GitHub (listar archivos, leer contenido y realizar commits).
+  - **Azure DevOps API:** Para analizar repositorios y generar documentación desde repositorios DevOps.
+  - **Azure OpenAI GPT-4o API:** Para análisis avanzado y generación de documentación Markdown automatizada.
+- **Patrones utilizados:**
+  - **Dependency Injection:** Implementado para el uso de `ILogger` y `HttpClient`.
+  - **Factorización funcional:** Las funciones tienen responsabilidades claramente definidas que se separan según tareas específicas:
+    - Realizar solicitudes API.
+    - Documentar archivos con fragmentación.
+    - Manipular SHA y detección de cambios.
+  - **Environment Variables:** Para configurar secretos como `GITHUB_TOKEN`, `OPENAI_API_KEY`, y `AZURE_TOKEN`.
 
 ---
 
-### **Diagrama Mermaid**  
-```mermaid  
-graph TD  
-    A[Front-End usuario (POST Request)] -->|HTTP Trigger| B[Azure Function: CreateDocumentation]  
-    style A fill:#f7e849,stroke:#333,stroke-width:2px  
-
-    B --> C[GitHub API / DevOps API]  
-    B --> D[Azure OpenAI GPT-4]  
-
-    C --> E[Listado y lectura de archivos]  
-    D --> F[Generar Markdown con análisis técnico]  
-
-    E --> G[Documentación generada y sincronizada]  
-    F --> G  
-
-    G --> H[Repositorio actualizado con Markdown]  
-```  
+#### 3. Qué tipo de arquitectura tiene
+La solución está diseñada como una **arquitectura de microservicios** basada en:
+- **Serverless**: Cada función Azure implementa una responsabilidad autónoma y discreta. 
+- **Event-driven architecture** con desencadenantes HTTP (`HttpTrigger`), adaptable para expandirse a otros triggers (como eventos en un repositorio).
+- **Desacoplamiento alto:** El flujo de información está dividido en segmentos controlados (lectura de repositorios, generación de documentación, actualización mediante APIs externas).
 
 ---
 
-### Flujo General de la Aplicación  
-
-1. **Inicio**:  
-   - El usuario envía una solicitud HTTP POST con información sobre el repositorio y las credenciales API necesarias (`GITHUB_TOKEN`, `AZURE_TOKEN`) al endpoint expuesto por las Azure Functions.  
-
-2. **Listar Archivos**:  
-   - La función llama a la GitHub API o Azure DevOps API para listar los archivos en el repositorio especificado y filtrar aquellos relevantes (`.cs`, `.js`, `.html`).  
-
-3. **Extracción de Contenido**:  
-   - Descarga el contenido de cada archivo, lo procesa, y calcula su SHA para determinar si ya existe documentación actualizada.  
-
-4. **Generación de Markdown**:  
-   - Fragmenta archivos grandes y los envía a OpenAI GPT-4 para analizar y generar documentación técnica en formato Markdown.  
-
-5. **Verificación de Versionado**:  
-   - Compara el SHA del archivo actual con el contenido previo para decidir si se crea una actualización en el repositorio.  
-
-6. **Actualización Final**:  
-   - La documentación generada se sincroniza en el directorio `docs` de los repositorios GitHub/Azure DevOps.  
-
-> Cada operación está envuelta en trazabilidad con logging para asegurar control en cada paso.  
+#### 4. Dependencias o componentes externos presentes
+La solución depende de varias tecnologías externas y componentes clave:
+1. **GitHub API**: 
+   - Endpoints utilizados para listar archivos (`/repos/{repo}/git/trees`), leer contenido (`/repos/{repo}/contents`), y escribir o actualizar archivos (`PUT /repos/{repo}/contents`).
+2. **Azure DevOps API**:
+   - Endpoints para listar archivos y realizar commits.
+3. **OpenAI GPT-4o API Azure Deployment**:
+   - Para generación de textos (Markdown) con análisis semántico realizado sobre los fragmentos de código.
+4. **Medio ambiente (Environment variables)**:
+   - `OPENAI_API_KEY`, `GITHUB_TOKEN`, `AZURE_TOKEN` son esenciales para la autenticación con servicios de terceros.
+5. **Aplicación Insights (opcional)**:
+   - Comentada en `Program.cs`, pero podría ser utilizada para agregar telemetría avanzada.
 
 ---
 
-### Conclusión Final  
+#### 5. Diagrama Mermaid (válido para GitHub Markdown)
+Este diagrama muestra los principales componentes de la solución y cómo interactúan entre sí.
 
-La solución presentada utiliza **Azure Functions** para construir una aplicación eficiente y escalable que puede integrarse con APIs de GitHub, Azure DevOps y OpenAI. Implementa una arquitectura sencilla, pero modular y extensible, perfecta para aplicaciones serverless modernas.  
+```mermaid
+graph TD
+    A[Azure Functions Worker]
+    A --> B[CreateDocumentation.cs]
+    A --> C[CreateDocumentation_Azure.cs]
+    A --> D[Program.cs]
+    
+    subgraph Funciones Serverless
+        B --> E[HttpTrigger (POST)]
+        C --> F[HttpTrigger (POST)]
+    end
 
-#### Características clave:  
-- **Automatización serverless** de documentación técnica.  
-- **Escalabilidad** al listar cientos/miles de archivos en repositorios remotos.  
-- **Integración avanzada** con servicios de IA como OpenAI GPT para análisis contextual.  
-- Diseño **reutilizable** y extensible para múltiples repositorios y escenarios de documentación.  
+    subgraph Servicios Externos
+        G[GITHUB API]
+        H[Azure DevOps API]
+        I[Azure OpenAI GPT-4o API]
+    end
 
-Esta solución es ideal para proyectos que buscan mantener documentación técnica actualizada de manera autónoma y escalable.
+    E --> G
+    E --> I
+    F --> H
+    F --> I
+
+    subgraph Ambiente
+        J[Environment Variables]
+        J --> K[OPENAI_API_KEY]
+        J --> L[GITHUB_TOKEN]
+        J --> M[AZURE_TOKEN]
+    end
+
+    B --> J
+    C --> J
+```
+
+---
+
+### Conclusión final
+1. **Breve resumen técnico:** Este repositorio contiene una solución **serverless** que utiliza **Azure Functions** para realizar análisis de repositorios GitHub y Azure DevOps, generando documentación automática basada en **GPT-4**. Está diseñado con alta modularidad y capacidad para manejar múltiples servicios externos.
+2. **Descripción de arquitectura:** Arquitectura de microservicios construida como funciones individuales, event-driven y con desacoplamiento claro. Integración directa con APIs externas (GitHub, Azure DevOps y OpenAI), respetando el patrón "microservicio compartido".
+3. **Tecnologías destacadas:** Uso de .NET, Azure SDKs (Functions Worker) y APIs RESTful. Lleva buenas prácticas de programación como *Dependency Injection*, fragmentación lógica y manejo robusto de errores mediante `EnsureSuccessStatusCode`.
+4. **Ultra-escalabilidad:** El flujo actual puede expandirse fácilmente a otros desencadenantes como websockets o análisis de eventos de repositorios.
