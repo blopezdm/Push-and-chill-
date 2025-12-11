@@ -1,127 +1,207 @@
+# CreateDocumentation.cs
 
-# Documentación Técnica
+## Descripción Funcional
+Este archivo define una función de Azure que analiza los repositorios de GitHub y genera documentación técnica para sus archivos, transformando su contenido en un conjunto de archivos en formato Markdown. La documentación generada se almacena directamente en el repositorio de GitHub. Este proceso también incluye análisis global del proyecto y puede dividir archivos en fragmentos si son demasiado grandes. 
 
-## Nombre del archivo: CreateDocumentation.cs
-
-## Descripción funcional
-
-El archivo `CreateDocumentation.cs` es una Azure Function que se utiliza para analizar archivos de un repositorio de GitHub, generar documentación en formato Markdown para dicho archivo y subir o actualizar la documentación en el repositorio. Además, esta función está diseñada para trabajar con integraciones de GitHub y OpenAI GPT para facilitar la generación de documentación técnica. También admite la gestión de documentos fragmentados cuando el tamaño del archivo es demasiado grande.
+La principal funcionalidad se implementa en la clase `CreateDocumentation`, utilizando el cliente HTTP para interactuar con las API de GitHub y OpenAI GPT-4.
 
 ---
 
-## Descripción técnica
+## Descripción Técnica
 
-### Estructura general
-
-El archivo contiene las siguientes propiedades, métodos y funciones definidas por el usuario:
-
-#### Propiedades
-1. **`_httpClient`**
-   - **Tipo:** `HttpClient` (C#).
-   - **Descripción:** Instancia de `HttpClient` utilizada para realizar solicitudes HTTP a la API de GitHub y Azure OpenAI.
-   - **Modificada por:** Ninguna función la modifica directamente, pero se utiliza como medio para enviar solicitudes GET y POST.
-
-2. **`_logger`**
-   - **Tipo:** `ILogger` (C#).
-   - **Descripción:** Instancia del log para registrar información sobre los procesos de la función. Se instancia mediante una fábrica de loggers en el método constructor.
-   - **Modificada por:** Ninguna función la modifica directamente, pero se utiliza para registrar logs.
-
-3. **`MaxFragmentLength`**
-   - **Tipo:** `const int` (C#).
-   - **Descripción:** Define el tamaño máximo de un fragmento de texto para la división de archivos grandes, utilizado en `GenerateDocumentationWithFragments`.
+### Clase: `CreateDocumentation`
+Esta clase implementa la lógica para la generación de documentación técnica desde repositorios GitHub. Utiliza las siguientes dependencias:
+- **HttpClient**: Es invocado para realizar solicitudes a GitHub.
+- **ILogger**: Se utiliza para registrar información sobre el proceso.
+- **Microsoft Azure Functions Attributes**: Define la entrada para la función.
 
 ---
 
-### Métodos y Funciones
-
-1. **`CreateDocumentation` (Constructor)**
-   - **Lenguaje:** C#.
-   - **Parámetros:**
-     - `loggerFactory`: Instancia de la fábrica de loggers de tipo `ILoggerFactory`.
-   - **Variables modificadas:** 
-     - Inicializa las propiedades `_httpClient` y `_logger`.
-   - **Condiciones o validaciones:** No aplica.
-   - **Descripción:** Este es el constructor de la clase `CreateDocumentation`. Crea la instancia del cliente HTTP para las comunicaciones de red y establece un logger para registrar mensajes sobre el flujo de ejecución.
-   - **Valor de retorno:** No tiene retorno explícito.
-
----
-
-2. **`Run`**
-   - **Lenguaje:** C#.
-   - **Parámetros:**
-     - `[HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req`: Representa el objeto de la petición HTTP recibida por la Azure Function.
-   - **Variables modificadas:** Ninguna.
-   - **Condiciones o validaciones:**
-     - Validación de respuesta exitosa (`IsSuccessStatusCode`) en distintos puntos para el manejo de errores de las APIs utilizadas.
-   - **Descripción:** Este es el método principal de la clase, que se ejecuta cuando la Azure Function es llamada. Realiza las siguientes tareas:
-     1. Extrae el cuerpo y propiedades del JSON recibido (`repo` y `branch`) para determinar el repositorio y la rama que se van a analizar.
-     2. Configura las cabeceras de autorización de `HttpClient` utilizando tokens de acceso obtenidos de las variables de entorno: `GITHUB_TOKEN` y `OPENAI_API_KEY`.
-     3. Obtiene la lista de archivos del repositorio especificado mediante la API de GitHub y filtra aquellos que sean archivos fuente de extensión `.cs`, `.js`, `.html` y excluye directorios no deseados (`bin/`, `obj/`, etc.).
-     4. Itera sobre los archivos obtenidos para realizar las siguientes tareas:
-         - Recupera el contenido del archivo codificado en base64 desde GitHub.
-         - Compara el contenido con los documentos existentes en el repositorio para determinar si es necesario realizar un nuevo análisis.
-         - En caso de que el archivo sea demasiado grande, lo fragmenta utilizando el método `GenerateDocumentationWithFragments`.
-         - Subir o actualizar el archivo de documentación en formato `.md` en el directorio del repositorio, añadiendo el SHA del archivo para realizar la verificación de cambios futuros.
-     5. Devuelve un mensaje indicando si el análisis fue completado correctamente.
-   - **Valor de retorno:** Devuelve una respuesta HTTP (`HttpResponseData`) con un mensaje, en este caso `"✅ Análisis completado."`.
+#### Método: `CreateDocumentation` (Constructor)
+- **Lenguaje:** C#
+- **Parámetros:**
+  - `loggerFactory`: Objeto para la creación de un logger.
+- **Variables Modificadas:**
+  - `_httpClient`: Inicializado con una nueva instancia de `HttpClient`.
+  - `_logger`: Logger inicializado mediante `loggerFactory`.
+- **Descripción:** 
+  Este constructor inicializa las instancias de `HttpClient` y `ILogger` necesarias para ejecutar las operaciones del procesamiento y generación de documentación, asegurando que los componentes estén listos para una interacción eficiente con las APIs.
+- **Valor de Retorno:** No aplica (constructor).
 
 ---
 
-3. **`GenerateDocumentationWithFragments`**
-   - **Lenguaje:** C#.
-   - **Parámetros:**
-     - `filePath`: Ruta del archivo analizado.
-     - `content`: Contenido del archivo como una cadena de texto.
-     - `apiKey`: Clave de acceso para la API de Azure OpenAI GPT.
-   - **Variables modificadas:**
-     - `sb` (StringBuilder): Se acumulan los fragmentos de Markdown generados.
-   - **Condiciones o validaciones:**
-     - Divide el contenido total en fragmentos cuyo tamaño sea menor o igual a `MaxFragmentLength`.
-   - **Descripción:** Este método divide el contenido del archivo grande en fragmentos si supera el máximo determinado por `MaxFragmentLength`. Cada fragmento se usa como entrada para construir un prompt que genera documentación técnica en Markdown utilizando el método `GenerateDocumentationAsync`. Luego une los fragmentos generados en un único string.
-   - **Valor de retorno:** Devuelve un string que contiene la documentación completa, incluida cualquier fragmentación procesada.
+#### Método: `Run`
+- **Lenguaje:** C#
+- **Parámetros:**
+  - `req`: Objeto de tipo `HttpRequestData` que contiene los datos de la solicitud HTTP.
+- **Variables Modificadas:**
+  - `_httpClient.DefaultRequestHeaders.Authorization`: Añade un token de autenticación para las peticiones a GitHub.
+  - `_httpClient.DefaultRequestHeaders.UserAgent`: Especifica el agente de usuario.
+  - `files`: Lista de archivos obtenidos del repositorio GitHub.
+- **Condiciones, Validaciones o Requisitos:**
+  - `AuthorizationLevel.Function` define el nivel de autorización para ejecutar esta función.
+  - Extrae el JSON del cuerpo de la solicitud para determinar las propiedades `repo`, `branch` y `complete`. 
+  - Valida el acceso a las APIs de GitHub mediante las claves: `GITHUB_TOKEN` y `OPENAI_API_KEY`.
+  - Filtra únicamente archivos con extensiones `.cs`, `.js`, `.html` ignorando ciertas rutas o clases específicas.
+- **Descripción:**
+  1. Obtiene datos JSON del cuerpo de la solicitud (propiedades como el nombre de repositorio `repo`, rama `branch` y si el análisis es completo `complete`).
+  2. Recupera una lista de archivos del repositorio utilizando la API de GitHub, basado en el nombre del repositorio y la rama proporcionados.
+  3. Filtra los archivos relevantes y genera la documentación técnica de cada archivo utilizando el método `GenerateDocumentationWithFragments` si son muy grandes.
+  4. Actualiza o sube los archivos en formato Markdown generados a la misma rama del repositorio correspondiente.
+  5. Si el análisis es completo, genera un archivo global README.md del repositorio y lo sube a la ruta raíz del mismo.
+- **Valor de Retorno:** 
+  Una respuesta HTTP de tipo `HttpResponseData` que marca si el análisis fue completado con éxito.
 
 ---
 
-4. **`BuildPrompt`**
-   - **Lenguaje:** C#.
-   - **Parámetros:**
-     - `filePath`: Ruta del archivo analizado.
-     - `codeFragment`: Fragmento específico de código.
-     - `fragmentIndex`: Índice del fragmento actual.
-     - `totalFragments`: Total de fragmentos en el archivo.
-   - **Variables modificadas:** Ninguna.
-   - **Condiciones o validaciones:** Ninguna.
-   - **Descripción:** Construye un prompt detallado que incluye las instrucciones de cómo documentar un fragmento de código. Incluye el fragmento de código, índice del fragmento y total de fragmentos junto con las normas para la generación del Markdown.
-   - **Valor de retorno:** Devuelve un string que contiene el prompt para la generación de documentación técnica en formato Markdown.
+#### Método: `GenerateDocumentationWithFragments`
+- **Lenguaje:** C#
+- **Parámetros:**
+  - `filePath`: Ruta del archivo dentro del repositorio.
+  - `content`: Contenido completo del archivo en formato texto.
+  - `apiKey`: Llave de API para acceder a OpenAI.
+- **Variables Modificadas:** Ninguna.
+- **Condiciones, Validaciones o Requisitos:**
+  - Calcula el tamaño para dividir el contenido en fragmentos si excede el límite de caracteres definido por `MaxFragmentLength` (15,000 caracteres).
+  - Los fragmentos son procesados individualmente.
+- **Descripción:** 
+  1. Divide el contenido del archivo si excede el límite de caracteres.
+  2. Por cada fragmento, construye un prompt que contiene instrucciones específicas para generar documentación técnica.
+  3. Para cada fragmento, genera un archivo Markdown solicitando información al método `GenerateDocumentationAsync`.
+  4. Combina la documentación técnica de los fragmentos para retornar un único archivo en formato Markdown asociado al contenido completo del archivo original.
+- **Valor de Retorno:** Un string que representa la documentación en formato Markdown del archivo completo.
 
 ---
 
-5. **`GenerateDocumentationAsync`**
-   - **Lenguaje:** C#.
-   - **Parámetros:**
-     - `prompt`: Prompt de texto que será enviado al modelo OpenAI GPT.
-     - `apiKey`: Clave de acceso para la API de Azure OpenAI GPT.
-   - **Variables modificadas:** Ninguna.
-   - **Condiciones o validaciones:**
-     - La respuesta HTTP recibida debe ser exitosa (`response.EnsureSuccessStatusCode()`).
-   - **Descripción:** Este método utiliza la API de Azure OpenAI GPT para generar documentación técnica en formato Markdown a partir del prompt proporcionado. Se realiza una solicitud POST a la API con el prompt definido y se devuelve como resultado la respuesta generada por el modelo.
-   - **Valor de retorno:** Devuelve un string que contiene la documentación generada en formato Markdown.
+#### Método: `BuildPrompt`
+- **Lenguaje:** C#
+- **Parámetros:**
+  - `filePath`: Ruta del archivo dentro del repositorio.
+  - `codeFragment`: Fragmento de código.
+  - `fragmentIndex`: Índice actual de fragmento.
+  - `totalFragments`: Número total de fragmentos.
+- **Variables Modificadas:** Ninguna.
+- **Condiciones, Validaciones o Requisitos:**
+  - Crea un prompt con instrucciones específicas para generar documentación técnica de un fragmento específico.
+- **Descripción:** 
+  1. Define normas claras sobre cómo debe generarse la documentación técnica.
+  2. Incluye detalles específicos como el índice y cantidad total de fragmentos procesados.
+  3. Combina el contenido del código con las instrucciones para optimizar la generación de la documentación de OpenAI.
+- **Valor de Retorno:** Un string con el prompt enriquecido para procesar documentación técnica.
 
 ---
 
-### Consideraciones
-
-- Este archivo depende de varias bibliotecas externas, como `Microsoft.AspNetCore.Mvc`, `Microsoft.Azure.Functions.Worker`, `System.Text.Json`, entre otras.
-- La función `Run` es el punto de entrada de la Azure Function, mientras que las funciones auxiliares (`GenerateDocumentationWithFragments`, `BuildPrompt`, `GenerateDocumentationAsync`) ayudan en el proceso de análisis del contenido y generación de documentación.
-- El sistema gestiona verificación de cambios en los archivos a través de los valores de SHA, lo cual evita redundancias en la generación de documentación.
-- Es importante que las variables de entorno `GITHUB_TOKEN` y `OPENAI_API_KEY` estén correctamente configuradas para el funcionamiento de este archivo, ya que son esenciales para la interacción con los servicios externos.
+#### Método: `GenerateDocumentationAsync`
+- **Lenguaje:** C#
+- **Parámetros:**
+  - `prompt`: Contiene las instrucciones y fragmentos de código para procesar con OpenAI.
+  - `apiKey`: Llave de acceso para invocar la API OpenAI GPT-4.
+- **Variables Modificadas:** Ninguna.
+- **Condiciones, Validaciones o Requisitos:**
+  - Realiza una solicitud HTTP POST a la API de OpenAI con el prompt preformado.
+  - La respuesta debe tener un formato válido (200 OK) para ser procesada y retornar la documentación.
+- **Descripción:** 
+  1. Configura el cliente HTTP para conectarse al endpoint de OpenAI.
+  2. Formatea el payload asociado al *prompt* y envía la solicitud HTTP.
+  3. Recupera la respuesta con la documentación en formato texto.
+- **Valor de Retorno:** Un string con la documentación técnica generada por OpenAI para el código de entrada.
 
 ---
 
-## Fragmento 1 de 1
+## Dependencias Internas y Externas
+### Internas
+- Métodos auxiliares:
+  - `GenerateDocumentationWithFragments`
+  - `BuildPrompt`
+  - `GenerateDocumentationAsync`
+- Constantes: 
+  - `MaxFragmentLength` (15,000 caracteres).
 
-Esta función proporciona una solución automatizada robusta para generar documentación técnica de archivos en repositorios GitHub utilizando tecnologías modernas como Azure Functions, OpenAI GPT y servicios web. Puede ser útil para equipos de desarrollo que busquen mejorar la calidad y mantenibilidad de su código manteniendo documentación actualizada.
+### Externas
+- **System.Net.Http.Headers**: Para configurar las cabeceras HTTP.
+- **System.Text.Json**: Para el manejo de datos JSON (serialización/deserialización).
+- **Azure Functions SDK**: Permite definir la función `CreateDocumentation` como una función de Azure compatible con `HttpTrigger`.
+- **Microsoft Extensions**:
+  - `Logging`: Para registrar mensajes e información del proceso.
+  - `HttpClient`: Cliente para ejecutar solicitudes HTTP.
+- APIs externas:
+  - GitHub: Para interactuar con repositorios, descargar archivos y actualizarlos.
+  - OpenAI GPT-4: Para generar documentación técnica basada en contexto y fragmentos de código.
+
+--- 
+
+## Patrones de Arquitectura y Diseño
+- **Microservicios (Azure Functions)**: La función `CreateDocumentation` implementa el paradigma de funciones autónomas en el contexto de servicios en la nube, siguiendo el modelo de microservicios.
+- **Cliente-Servidor RESTful**: El archivo utiliza un enfoque de cliente-servidor para comunicarse con la API de GitHub y OpenAI a través de HTTP.
+- **Separación de responsabilidades**: Cada método está diseñado con una responsabilidad específica para garantizar modularidad, legibilidad y mantenimiento.
+
+--- 
+### Fragmento 2 de 2: Documentación técnica de las funciones/métodos
+
+#### Métodos definidos:
+
+---
+
+### 1. Método: **GenerateDocumentationGeneralAsync**
+
+- **Lenguaje:** C#  
+- **Parámetros:**
+  - `repoSummary`  
+    - Texto que contiene la descripción del repositorio GitHub que se analizará.  
+  - `apiKey`  
+    - Clave API utilizada para enviar solicitudes al endpoint de OpenAI.  
+
+- **Variables modificadas:**
+  - Ninguna variable global es modificada.  
+  - Se crean varias variables locales para procesar y enviar datos al endpoint, como `endpoint`, `deployment`, `apiVersion`, `payload`, entre otras.  
+
+- **Condiciones/Validaciones:**  
+  - El método utiliza la función `response.EnsureSuccessStatusCode()` para garantizar que la llamada HTTP al endpoint se complete correctamente. En caso de fallo, se lanzará una excepción.  
+
+- **Función anidada:** Ninguna anidación visible.  
+
+- **Descripción:**  
+  Este método asíncrono construye un prompt para solicitar documentación técnica y un diagrama **Mermaid** mediante una llamada al servicio OpenAI. El proceso consiste en:  
+  1. Construir un prompt detallado que solicita el análisis técnico y arquitectónico del repositorio proporcionado. Este incluye reglas específicas para la generación del diagrama **Mermaid** compatible con Markdown.  
+  2. Definir parámetros como el payload, que incluye mensajes dirigidos al modelo de inteligencia artificial y su configuración (como temperatura y tokens máximos).  
+  3. Enviar la solicitud HTTP POST al endpoint Azure OpenAI, definiendo el destino exacto en base a un `deployment` y `apiVersion`.  
+  4. Procesar la respuesta JSON proveniente del servicio, extrayendo la propiedad `choices[0].message.content`.  
+  5. Retornar como resultado un texto generado por el modelo, que incluye tanto la documentación técnica como el diagrama **Mermaid**.  
+
+- **Valor de retorno:**  
+  - Retorna un string (`string`) que contiene la respuesta generada por el modelo OpenAI. Este texto incluye:  
+    - Resumen técnico.  
+    - Descripción de arquitectura.  
+    - Detalle de las tecnologías usadas.  
+    - Diagrama **Mermaid** compatible con GitHub.  
+    - Conclusión técnica.  
+
+---
+
+### Flujo General del Código:
+1. **Declaración del prompt:** El prompt textual generado incluye preguntas relacionadas con la arquitectura, tecnologías, dependencias y diagrama propuesto.  
+2. **Definición de parámetros básicos:** Se configuran las variables clave necesarias para la comunicación con el servicio OpenAI:
+   - `endpoint`: URL del servicio.  
+   - `deployment`: Identificador del modelo desplegado.  
+   - `apiVersion`: Versión API específica.  
+3. **Construcción del payload:** Se crea un objeto serializable JSON que incluye mensajes y parámetros de configuración de modelo IA (como `max_tokens`, `temperature` y otros).  
+4. **HTTP Request:** Se utiliza una instancia de `HttpClient` para enviar la información a través de un POST al endpoint especificado.  
+5. **Validación de respuesta:** La función garantiza que el resultado sea exitoso (`EnsureSuccessStatusCode`).  
+6. **Procesamiento y retorno:** Analiza el contenido JSON resultante y retorna su contenido textual principal, que contiene la documentación solicitada.
+
+---
+
+### Notas Técnicas Adicionales:
+- **Librerías usadas:**  
+  - `System.Net.Http` para manejo y envío de solicitudes HTTP.  
+  - `System.Text.Json` para manipulación y parseo de contenido JSON.  
+  - `System` para el manejo de objetos estándar como cadenas e iteradores.  
+
+- **Requisito clave:**  
+  El usuario debe proporcionar un valor válido para `apiKey`. Sin esta clave, el método no podrá realizar la solicitud al servicio OpenAI Azure.  
+
+- **Ejecución asíncrona:**  
+  Este método depende de `HttpClient` y operaciones asincrónicas (`await`), lo que permite implementarlo en entornos con ejecución no bloqueante (ideal para aplicaciones web o servicios backend).
 
 
-
-SHA:d0a65a24da096e405be691ecf6a0c520cd08528b
+SHA:7f17bb4bd3ff568a414d7359e9ab9a43949990a3
