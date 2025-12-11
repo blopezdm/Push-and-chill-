@@ -39,6 +39,7 @@ namespace FunctionDocs
             string branch = jsonDoc.RootElement.GetProperty("Branch").GetString();
             string pat = Environment.GetEnvironmentVariable("AZURE_TOKEN");
             string openAiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+            string openurl = Environment.GetEnvironmentVariable("OPENAI_URL");
             string model = "gpt-4o";
 
             _logger.LogInformation($"Iniciando análisis para repo: {org}/{project}, repoId: {repoId}, branch: {branch}");
@@ -166,11 +167,11 @@ namespace FunctionDocs
             return $"Tu tarea es analizar el siguiente archivo y generar **documentación técnica completa en Markdown**.\n\nFragmento {fragmentIndex} de {totalFragments}\n\nInstrucciones:\n{normas}\n\nArchivo: {filePath}\n\nCódigo:\n{codeFragment}";
         }
 
-        private async Task<string> AnalyzeWithOpenAI(string prompt, string key, string model)
+        private async Task<string> AnalyzeWithOpenAI(string prompt, string key, string model,string endpoint)
         {
-            string endpoint = "https://openai-netcore.openai.azure.com/";
-            string deployment = "gpt-4o";
-            string apiVersion = "2024-04-01-preview";
+            
+            string deployment = "gpt-4.1";
+            string apiVersion = "2025-04-14";
 
             var payload = new
             {
