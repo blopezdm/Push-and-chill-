@@ -105,7 +105,7 @@ namespace FunctionDocs
                 }
 
                 // 5. Analizar con OpenAI fragmentando
-                string fullDoc = await AnalyzeFileInFragments(content, file.Path, openAiKey, model);
+                string fullDoc = await AnalyzeFileInFragments(content, file.Path, openAiKey, model, openurl);
 
                 // 6. Añadir SHA al final del documento
                 string docWithSha = fullDoc + $"\n\nSHA:{fileSha}";
@@ -119,7 +119,7 @@ namespace FunctionDocs
             return response;
         }
 
-        private async Task<string> AnalyzeFileInFragments(string content, string filePath, string key, string model)
+        private async Task<string> AnalyzeFileInFragments(string content, string filePath, string key, string model,string endpoint)
         {
             var sb = new StringBuilder();
             int start = 0;
@@ -133,7 +133,7 @@ namespace FunctionDocs
 
                 string prompt = BuildPrompt(filePath, fragment, fragmentIndex, totalFragments);
 
-                string mdFragment = await AnalyzeWithOpenAI(prompt, key, model);
+                string mdFragment = await AnalyzeWithOpenAI(prompt, key, model,endpoint);
 
                 sb.AppendLine(mdFragment);
                 start += length;
